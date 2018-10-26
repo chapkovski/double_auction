@@ -4,6 +4,8 @@ from otree.api import (
 )
 from django.db import models as djmodels
 import random
+from django.db.models.signals import post_save
+from django.db.models import Q
 
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
          'Chapkovski@gmail.com'
@@ -36,10 +38,8 @@ class Subsession(BaseSubsession):
             for b in g.get_buyers():
                 b.buyerrepositorys.create(value=random.random(), quantity=random.randint(0, 10))
 
-        for p in self.get_players():
-            if p.role() == 'buyer':
-
-                print('AAAA', p.buyerrepositorys.all())
+        for g in self.get_groups():
+            print(g.get_contracts())
 
 
 class Group(BaseGroup):
@@ -52,6 +52,18 @@ class Group(BaseGroup):
     def get_sellers(self):
         return self.get_players_by_role('seller')
 
+    def get_contracts(self):
+        return Contract.objects.filter(Q(bid__player__group=self) | Q(ask__player__self=self))
+
+    def non_empty_buyer_exists(self) -> bool:
+        ...
+
+    def non_empty_seller_exists(self) -> bool:
+        ...
+
+    def is_market_closed(self)->bool:
+        return not all(self.non_empty_buyer_exists(), self.non_empty_seller_exists())
+
 
 class Player(BasePlayer):
     endowment = models.CurrencyField()
@@ -62,13 +74,23 @@ class Player(BasePlayer):
         else:
             return 'buyer'
 
+    def get_contracts(self):
+        return Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
 
-class BaseRecord(djmodels.Model):
-    player = djmodels.ForeignKey(
-        to=Player,
-        related_name="%(class)ss",
-    )
+    def get_bids(self):
+        ...
 
+    def get_asks(self):
+        ...
+
+    def is_buyer_repository_available(self):
+        ...
+
+    def seller_has_money(self):
+        ...
+
+
+class Base(djmodels.Model):
     quantity = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -77,8 +99,20 @@ class BaseRecord(djmodels.Model):
         abstract = True
 
 
+class BaseRecord(Base):
+    player = djmodels.ForeignKey(
+        to=Player,
+        related_name="%(class)ss",
+    )
+
+    class Meta:
+        abstract = True
+
+
 class BaseStatement(BaseRecord):
     price = models.FloatField()
+    # initially all bids and asks are active. when the contracts are created with their participation they got passive
+    active = models.BooleanField(initial=True)
 
     class Meta:
         abstract = True
@@ -105,8 +139,20 @@ class BuyerRepository(BaseRecord):
     value = models.FloatField()
 
 
-class Contracts(djmodels.Model):
+class Contract(Base):
     bid = djmodels.ForeignKey(to=Bid)
     ask = djmodels.ForeignKey(to=Ask)
-    quantity = models.IntegerField()
     price = models.FloatField()
+
+    @classmethod
+    def post_create(cls, sender, instance, created, *args, **kwargs):
+        if not created:
+            return
+        # when contract is created bid and ask that are involved get passive
+        instance.bid.active = False
+        instance.bid.save()
+        instance.ask.active = False
+        instance.save()
+
+
+post_save.connect(Contract.post_create, sender=Contract)
