@@ -12,12 +12,13 @@ SESSION_CONFIG_DEFAULTS = {
 }
 
 SESSION_CONFIGS = [
-    #{
-    #    'name': 'public_goods',
-    #    'display_name': "Public Goods",
-    #    'num_demo_participants': 3,
-    #    'app_sequence': ['public_goods', 'payment_info'],
-    #},
+    {
+       'name': 'double_auction',
+       'display_name': "Double auction",
+       'num_demo_participants': 3,
+       'app_sequence': ['double_auction'],
+        'whatever':'whatever'
+    },
 ]
 
 
