@@ -1,0 +1,106 @@
+{% extends "global/Page.html" %}
+{% load otree static %}
+
+
+
+{% block body_main %}
+    <!-- Begin page content -->
+
+    <main role="main" class="container-fluid">
+        <h1 class="mt-5">Market</h1>
+        <p class="lead">Pin a fixed-height footer to the bottom of the viewport in desktop browsers with this custom
+            HTML and CSS.</p>
+        <div class="row">
+            <div class="col-4">
+                <h2>Bids</h2>
+                        <div class="table-wrapper-scroll-y">
+                    <table class="table table-sm table-stripped">
+                        {% for i,j in bids %}
+                        <tr>
+                            <td>a</td>
+                            <td>b</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+
+            <div class="col-4">
+                <h2>Asks</h2>
+                        <div class="table-wrapper-scroll-y">
+                    <table class="table table-sm table-stripped">
+                         {% for i,j in asks %}
+                        <tr>
+                            <td>a</td>
+                            <td>b</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+            <div class="col-4">
+                <h2>Repository and contracts</h2>
+                <div class="table-wrapper-scroll-y">
+                    <table class="table table-sm table-stripped">
+                        {% for i,j,k in repository %}
+                        <tr>
+                            <td>a</td>
+                            <td>b</td>
+                        </tr>
+                        {% endfor %}
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-4">msth here</div>
+                <div class="col-4">msth here</div>
+                <div class="col-4">msth here</div>
+            </div>
+        </div>
+    </footer>
+{% endblock %}
+
+{% block styles %}
+    <style>
+        html {
+            position: relative;
+            min-height: 100%;
+        }
+
+        body {
+            margin-bottom: 60px; /* Margin bottom by footer height */
+        }
+
+        .footer {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            min-height: 300px !important;
+            height: 30%; /* Set the fixed height of the footer here */
+            line-height: 60px; /* Vertically center the text there */
+            background-color: #f5f5f5;
+        }
+
+        .header {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            min-height: 300px !important;
+            height: 30%; /* Set the fixed height of the footer here */
+            line-height: 60px; /* Vertically center the text there */
+            background-color: #f5f5f5;
+        }
+
+        .table-wrapper-scroll-y {
+            display: block;
+            max-height: 200px;
+            overflow-y: auto;
+            -ms-overflow-style: -ms-autohiding-scrollbar;
+        }
+    </style>
+{% endblock %}

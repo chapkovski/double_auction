@@ -40,6 +40,8 @@ class Subsession(BaseSubsession):
 
         for g in self.get_groups():
             print(g.get_contracts())
+        for g in self.get_players():
+            print(g.get_contracts())
 
 
 class Group(BaseGroup):
@@ -53,7 +55,7 @@ class Group(BaseGroup):
         return self.get_players_by_role('seller')
 
     def get_contracts(self):
-        return Contract.objects.filter(Q(bid__player__group=self) | Q(ask__player__self=self))
+        return Contract.objects.filter(Q(bid__player__group=self)|Q(ask__player__group=self))
 
     def non_empty_buyer_exists(self) -> bool:
         ...
