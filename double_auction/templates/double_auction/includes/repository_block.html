@@ -11,15 +11,8 @@
                 <th>Profit</th>
             </tr>
             </thead>
-            <tbody>
-            {% for i,j,k,l in repository %}
-                <tr>
-                    <td class="filterable-cell">{{ i }}</td>
-                    <td class="filterable-cell">{{ j }}</td>
-                    <td class="filterable-cell">{{ k }}</td>
-                    <td class="filterable-cell">{{ l }}</td>
-                </tr>
-            {% endfor %}
+            <tbody class="repo_container">
+            {% include 'double_auction/includes/repo_to_render.html' %}
             </tbody>
         </table>
 

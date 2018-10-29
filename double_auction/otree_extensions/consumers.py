@@ -40,9 +40,11 @@ class MarketTracker(JsonWebsocketConsumer):
         # todo: check if a seller has items in repository left. If not, send a signal so he can be forwarded to wp
         # todo: check if contract can be done. If yes, update repo and money for both seller and buyer. Send them
         # ... both some info regarding their repos to update corresponding containers, money/profit/ areas
-        # todo: show timer left
+
         # todo: validate correct price is inserted
         # todo: config quantity (more than 1 if settings are set for that)
+        # todo: disabling buttons if new statements can't be made or no retraction possible (no bids are made)
+        # todo: syncrhonize timers among the entire group!
 
 
 
@@ -51,6 +53,13 @@ class MarketTracker(JsonWebsocketConsumer):
                 player.bids.create(price=msg['price'], quantity=msg['quantity'])
             else:
                 player.asks.create(price=msg['price'], quantity=msg['quantity'])
+            contract = group.check_spread()
+            print('CONTRACT MTHFCUKCK!!', contract)
+            if contract:
+                seller = contract.get_seller()
+                buyer = contract.get_buyer()
+                self.group_send(seller.group_name(), {'repository': seller.get_repo_html()})
+                self.group_send(buyer.group_name(), {'repository': buyer.get_repo_html()})
 
         if msg['action'] == 'retract_statement':
             to_del = player.get_last_statement()
@@ -58,7 +67,7 @@ class MarketTracker(JsonWebsocketConsumer):
                 to_del.delete()
         asks = group.get_asks_html()
         bids = group.get_bids_html()
-        spread= group.get_spread_html()
+        spread = group.get_spread_html()
         self.group_send(group.get_channel_group_name(), {'asks': asks,
                                                          'bids': bids,
                                                          'spread': spread})

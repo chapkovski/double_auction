@@ -26,7 +26,7 @@ class Constants(BaseConstants):
     num_rounds = 1
     units_per_seller = 3
     units_per_buyer = 3
-    time_per_round = 30
+    time_per_round = 30000
     multiple_unit_trading = True
     price_max_numbers = 10
     price_digits = 2
@@ -84,6 +84,15 @@ class Group(BaseGroup):
             'group': self,
         }))
 
+    def check_spread(self):
+        bid, ask = self.best_bid(), self.best_ask()
+        print('BID, ASK', bid, ask)
+        if all([bid, ask]):
+            if bid.price >= ask.price:
+                # perhaps sort them based on time of creation? and determine the price based on latest of two events
+                contract = Contract.create(bid=bid, ask=ask, price=min([bid.price, ask.price]))
+                return contract
+
     def non_empty_buyer_exists(self) -> bool:
         ...
 
@@ -112,6 +121,9 @@ class Player(BasePlayer):
             return 'seller'
         else:
             return 'buyer'
+
+    def get_repo_html(self):
+        ...
 
     def get_contracts(self):
         return Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
@@ -207,6 +219,12 @@ class Contract(Base):
     bid = djmodels.ForeignKey(to=Bid)
     ask = djmodels.ForeignKey(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
+
+    def get_seller(self):
+        return self.ask.player
+
+    def get_buyer(self):
+        return self.bid.player
 
     @classmethod
     def post_create(cls, sender, instance, created, *args, **kwargs):

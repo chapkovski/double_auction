@@ -38,4 +38,9 @@
 
 {% block scripts %}
     {% include 'double_auction/channels/market_channel.html' %}
+
+    {% if view.remaining_timeout_seconds != None %}
+        {% include 'otree/includes/TimeLimit.js.html' %}
+    {% endif %}
+    {{ form.media|default:"" }}
 {% endblock %}
