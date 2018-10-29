@@ -8,13 +8,8 @@
             <th>Quantity</th>
         </tr>
         </thead>
-        <tbody>
-        {% for a,b in asks %}
-            <tr>
-                <td class="filterable-cell">{{ a }}</td>
-                <td class="filterable-cell">{{ b }}</td>
-            </tr>
-        {% endfor %}
+        <tbody class="asks_container">
+       {% include 'double_auction/includes/asks_to_render.html' %}
         </tbody>
     </table>
 {% endblock %}

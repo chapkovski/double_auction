@@ -8,13 +8,8 @@
             <th>Quantity</th>
         </tr>
         </thead>
-        <tbody>
-        {% for i,j in bids %}
-            <tr>
-                <td class="filterable-cell">{{ i }}</td>
-                <td class="filterable-cell">{{ j }}</td>
-            </tr>
-        {% endfor %}
+        <tbody class="bids_container">
+        {% include 'double_auction/includes/bids_to_render.html' %}
         </tbody>
     </table>
 {% endblock %}

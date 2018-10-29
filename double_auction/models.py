@@ -6,7 +6,9 @@ from django.db import models as djmodels
 import random
 from django.db.models.signals import post_save
 from django.db.models import Q
-
+from django.utils.safestring import mark_safe
+from django.template.loader import render_to_string
+from django.core.exceptions import ObjectDoesNotExist
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
          'Chapkovski@gmail.com'
 
@@ -29,22 +31,21 @@ class Constants(BaseConstants):
 
 class Subsession(BaseSubsession):
     def creating_session(self):
-        for p in self.get_players():
-            ask = p.asks.create(price=random.random(), quantity=random.randint(0, 10))
-            bid = p.bids.create(price=random.random(), quantity=random.randint(0, 10))
-        for g in self.get_groups():
-            for c in g.get_sellers():
-                c.sellerrepositorys.create(cost=random.random(), quantity=random.randint(0, 10))
-            for b in g.get_buyers():
-                b.buyerrepositorys.create(value=random.random(), quantity=random.randint(0, 10))
 
         for g in self.get_groups():
-            print(g.get_contracts())
-        for g in self.get_players():
-            print(g.get_contracts())
+            for c in g.get_sellers():
+                for i in range(10):
+                    c.asks.create(price=random.random(), quantity=random.randint(0, 10))
+
+            for b in g.get_buyers():
+                for i in range(10):
+                    b.bids.create(price=random.random(), quantity=random.randint(0, 10))
 
 
 class Group(BaseGroup):
+    def get_channel_group_name(self):
+        return 'double_auction_group_{}'.format(self.pk)
+
     def get_players_by_role(self, role):
         return [p for p in self.get_players() if p.role() == role]
 
@@ -55,7 +56,25 @@ class Group(BaseGroup):
         return self.get_players_by_role('seller')
 
     def get_contracts(self):
-        return Contract.objects.filter(Q(bid__player__group=self)|Q(ask__player__group=self))
+        return Contract.objects.filter(Q(bid__player__group=self) | Q(ask__player__group=self))
+
+    def get_bids(self):
+        return Bid.objects.filter(player__in=self.get_buyers()).order_by('-created_at')
+
+    def get_asks(self):
+        return Ask.objects.filter(player__in=self.get_sellers()).order_by('-created_at')
+
+    def get_bids_html(self):
+        bids = self.get_bids()
+        return mark_safe(render_to_string('double_auction/includes/bids_to_render.html', {
+            'bids': bids
+        }))
+
+    def get_asks_html(self):
+        asks = self.get_asks()
+        return mark_safe(render_to_string('double_auction/includes/asks_to_render.html', {
+            'asks': asks
+        }))
 
     def non_empty_buyer_exists(self) -> bool:
         ...
@@ -63,7 +82,7 @@ class Group(BaseGroup):
     def non_empty_seller_exists(self) -> bool:
         ...
 
-    def is_market_closed(self)->bool:
+    def is_market_closed(self) -> bool:
         return not all(self.non_empty_buyer_exists(), self.non_empty_seller_exists())
 
 
@@ -90,11 +109,21 @@ class Player(BasePlayer):
 
     def seller_has_money(self):
         ...
+
     def action_name(self):
         if self.role() == 'buyer':
-            return 'ask'
-        return 'bid'
+            return 'bid'
+        return 'ask'
 
+    def get_last_statement(self):
+        try:
+            if self.role() == 'seller':
+                return self.asks.latest('created_at')
+            else:
+                return self.bids.latest('created_at')
+        except ObjectDoesNotExist:
+            # todo: think a bit what happens if last bid is non existent?
+            return
 
 class Base(djmodels.Model):
     quantity = models.IntegerField()

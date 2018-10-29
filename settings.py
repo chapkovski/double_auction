@@ -4,7 +4,7 @@ from os import environ
 # in SESSION_CONFIGS, except those that explicitly override it.
 # the session config can be accessed from methods in your apps as self.session.config,
 # e.g. self.session.config['participation_fee']
-
+EXTENSION_APPS = ['double_auction']
 SESSION_CONFIG_DEFAULTS = {
     'real_world_currency_per_point': 1.00,
     'participation_fee': 0.00,
@@ -13,14 +13,13 @@ SESSION_CONFIG_DEFAULTS = {
 
 SESSION_CONFIGS = [
     {
-       'name': 'double_auction',
-       'display_name': "Double auction",
-       'num_demo_participants': 3,
-       'app_sequence': ['double_auction'],
-        'whatever':'whatever'
+        'name': 'double_auction',
+        'display_name': "Double auction",
+        'num_demo_participants': 3,
+        'app_sequence': ['double_auction'],
+        'whatever': 'whatever'
     },
 ]
-
 
 # ISO-639 code
 # for example: de, fr, ja, ko, zh-hans
@@ -31,7 +30,6 @@ REAL_WORLD_CURRENCY_CODE = 'USD'
 USE_POINTS = True
 
 ROOMS = []
-
 
 # AUTH_LEVEL:
 # this setting controls which parts of your site are freely accessible,
@@ -49,7 +47,6 @@ AUTH_LEVEL = environ.get('OTREE_AUTH_LEVEL')
 ADMIN_USERNAME = 'admin'
 # for security, best to set admin password in an environment variable
 ADMIN_PASSWORD = environ.get('OTREE_ADMIN_PASSWORD')
-
 
 # Consider '', None, and '0' to be empty/false
 DEBUG = (environ.get('OTREE_PRODUCTION') in {None, '', '0'})

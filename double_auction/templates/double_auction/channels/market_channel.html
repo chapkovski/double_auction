@@ -1,0 +1,51 @@
+<script>
+    var statement_type = '{{ player.action_name }}';
+    var l = function (x) {
+        console.log(x);
+    };
+    $(function () {
+        var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
+        var ws_path = ws_scheme + '://' + window.location.host + "/market_channel/{{ player.id }}/{{ group.pk }}";
+        var socket = new ReconnectingWebSocket(ws_path);
+        var $price_inp = $('input#price');
+        var $quantity_inp = $('input#quantity_id');
+
+        var $asks_container = $('tbody.asks_container');
+        var $bids_container = $('tbody.bids_container');
+
+        socket.onmessage = function (event) {
+            var obj = jQuery.parseJSON(event.data);
+            l(obj);
+            $asks_container.html(obj.asks);
+            $bids_container.html(obj.bids);
+
+        };
+        $("button#submit_statement").on("click", function () {
+            l($quantity_inp.val());
+
+            var msg = {
+                'action': 'new_statement',
+                'type': statement_type,
+                'price': $price_inp.val(),
+                'quantity': $quantity_inp.val(),
+            };
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(msg));
+            }
+            ;
+            $price_inp.val('');
+        });
+        $("button#retract_statement").on("click", function () {
+            var msg = {
+                'action': 'retract_statement',
+
+            };
+            if (socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(msg));
+            }
+            ;
+        });
+
+    })
+    ;
+</script>

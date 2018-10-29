@@ -35,3 +35,7 @@
 {% block styles %}
     <link href="{% static "double_auction/market.css" %}" rel="stylesheet">
 {% endblock %}
+
+{% block scripts %}
+    {% include 'double_auction/channels/market_channel.html' %}
+{% endblock %}
