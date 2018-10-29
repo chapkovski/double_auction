@@ -9,6 +9,7 @@ from django.db.models import Q
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist
+
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
          'Chapkovski@gmail.com'
 
@@ -27,6 +28,8 @@ class Constants(BaseConstants):
     units_per_buyer = 3
     time_per_round = 30
     multiple_unit_trading = True
+    price_max_numbers = 10
+    price_digits = 2
 
 
 class Subsession(BaseSubsession):
@@ -59,10 +62,10 @@ class Group(BaseGroup):
         return Contract.objects.filter(Q(bid__player__group=self) | Q(ask__player__group=self))
 
     def get_bids(self):
-        return Bid.objects.filter(player__in=self.get_buyers()).order_by('-created_at')
+        return Bid.active_statements.filter(player__in=self.get_buyers()).order_by('-created_at')
 
     def get_asks(self):
-        return Ask.objects.filter(player__in=self.get_sellers()).order_by('-created_at')
+        return Ask.active_statements.filter(player__in=self.get_sellers()).order_by('-created_at')
 
     def get_bids_html(self):
         bids = self.get_bids()
@@ -76,6 +79,11 @@ class Group(BaseGroup):
             'asks': asks
         }))
 
+    def get_spread_html(self):
+        return mark_safe(render_to_string('double_auction/includes/spread_to_render.html', {
+            'group': self,
+        }))
+
     def non_empty_buyer_exists(self) -> bool:
         ...
 
@@ -84,6 +92,16 @@ class Group(BaseGroup):
 
     def is_market_closed(self) -> bool:
         return not all(self.non_empty_buyer_exists(), self.non_empty_seller_exists())
+
+    def best_ask(self):
+        bests = self.get_asks().order_by('-price')
+        if bests.exists():
+            return bests.first()
+
+    def best_bid(self):
+        bests = self.get_bids().order_by('price')
+        if bests.exists():
+            return bests.first()
 
 
 class Player(BasePlayer):
@@ -118,12 +136,13 @@ class Player(BasePlayer):
     def get_last_statement(self):
         try:
             if self.role() == 'seller':
-                return self.asks.latest('created_at')
+                return self.asks.filter(active=True).latest('created_at')
             else:
-                return self.bids.latest('created_at')
+                return self.bids.filter(active=True).latest('created_at')
         except ObjectDoesNotExist:
             # todo: think a bit what happens if last bid is non existent?
             return
+
 
 class Base(djmodels.Model):
     quantity = models.IntegerField()
@@ -144,10 +163,16 @@ class BaseRecord(Base):
         abstract = True
 
 
+class ActiveStatementManager(djmodels.Manager):
+    def get_queryset(self):
+        return super().get_queryset().filter(active=True)
+
+
 class BaseStatement(BaseRecord):
-    price = models.FloatField()
+    price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
     # initially all bids and asks are active. when the contracts are created with their participation they got passive
     active = models.BooleanField(initial=True)
+    active_statements = ActiveStatementManager()
 
     class Meta:
         abstract = True
@@ -155,6 +180,10 @@ class BaseStatement(BaseRecord):
     def __str__(self):
         return '{}. Price:{}, Quantity:{}. Created at: {}. Updated at: {}'. \
             format(self.__class__.__name__, self.price, self.quantity, self.created_at, self.updated_at)
+
+    def as_dict(self):
+        return {'price': str(self.price),
+                'quantity': self.quantity}
 
 
 class Ask(BaseStatement):
@@ -177,7 +206,7 @@ class BuyerRepository(BaseRecord):
 class Contract(Base):
     bid = djmodels.ForeignKey(to=Bid)
     ask = djmodels.ForeignKey(to=Ask)
-    price = models.FloatField()
+    price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
 
     @classmethod
     def post_create(cls, sender, instance, created, *args, **kwargs):

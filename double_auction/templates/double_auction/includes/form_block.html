@@ -10,8 +10,8 @@
             <tbody>
             <tr>
                 <th>Your lask {{ player.action_name }}:</th>
-                <td>1</td>
-                <td>1</td>
+                <td id="last_statement_price">{% if player.get_last_statement %} {{ player.get_last_statement.price }}{% endif %}</td>
+                <td id="last_statement_quantity">{% if player.get_last_statement %} {{ player.get_last_statement.quantity }}{% endif %}</td>
             </tr>
             </tbody>
         </table>

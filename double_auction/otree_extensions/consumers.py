@@ -38,14 +38,12 @@ class MarketTracker(JsonWebsocketConsumer):
         # todo: check if market is not yet closed - if yes, send a signal to proceed for all players
         # todo: check if a buyer has money left. if not, send a signal so he can be forwarded to wp
         # todo: check if a seller has items in repository left. If not, send a signal so he can be forwarded to wp
-        # todo: send data to update spread
         # todo: check if contract can be done. If yes, update repo and money for both seller and buyer. Send them
         # ... both some info regarding their repos to update corresponding containers, money/profit/ areas
-        # todo: in both asks and bids containers show active statements only (using Manager)
         # todo: show timer left
-        # todo: validate correct price is insert
+        # todo: validate correct price is inserted
         # todo: config quantity (more than 1 if settings are set for that)
-        # todo: show last bid/ask in the 'last bid/ask' area
+
 
 
         if msg['action'] == 'new_statement':
@@ -60,5 +58,10 @@ class MarketTracker(JsonWebsocketConsumer):
                 to_del.delete()
         asks = group.get_asks_html()
         bids = group.get_bids_html()
+        spread= group.get_spread_html()
         self.group_send(group.get_channel_group_name(), {'asks': asks,
-                                                         'bids': bids})
+                                                         'bids': bids,
+                                                         'spread': spread})
+        last_statement = player.get_last_statement()
+        if last_statement:
+            self.send({'last_statement': last_statement.as_dict()})

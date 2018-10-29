@@ -7,17 +7,8 @@
         <th>Price</th>
         <th>Quantity</th>
         </thead>
-        <tbody>
-        <tr>
-            <th>Best ask:</th>
-            <td>1</td>
-            <td>2</td>
-        </tr>
-        <tr>
-            <th>Best bid:</th>
-            <td>3</td>
-            <td>4</td>
-        </tr>
+        <tbody class="spread_container">
+        {% include 'double_auction/includes/spread_to_render.html' %}
         </tbody>
     </table>
 {% endblock %}
