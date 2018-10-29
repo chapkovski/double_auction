@@ -90,6 +90,10 @@ class Player(BasePlayer):
 
     def seller_has_money(self):
         ...
+    def action_name(self):
+        if self.role() == 'buyer':
+            return 'ask'
+        return 'bid'
 
 
 class Base(djmodels.Model):

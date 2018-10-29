@@ -1,0 +1,26 @@
+{% extends 'double_auction/includes/base_block.html' %}
+{% block title %}Info:{% endblock %}
+{% block content %}
+    <table class="table-stripped table table-sm table-bordered  ">
+        <tr>
+            <td>Your role:</td>
+            <td>{{ player.role|capfirst }}</td>
+        </tr>
+        <tr>
+            <td>Period:</td>
+            <td>{{ view.round_number }} of {{ Constants.num_rounds }}</td>
+        </tr>
+        <tr>
+            <td>Time remaining:</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td>Total period profit:</td>
+            <td>1</td>
+        </tr>
+        <tr>
+            <td>Session earnings:</td>
+            <td>1</td>
+        </tr>
+    </table>
+{% endblock %}

@@ -6,14 +6,14 @@ import random
 
 class Market(Page):
     def vars_for_template(self):
-        bidsize, asksize = random.randint(4, 10), random.randint(4, 10)
+        bidsize, asksize = random.randint(40, 50), random.randint(40, 50)
         a = random.sample(range(100), bidsize)
         b = random.sample(range(100), bidsize)
         bids = zip(a, b)
         a = random.sample(range(100), asksize)
         b = random.sample(range(100), asksize)
         asks = zip(a, b)
-        repsize = random.randint(3, 6)
+        repsize = random.randint(30, 60)
         a = random.sample(range(100), repsize)
         b = random.sample(range(100), repsize)
         c = random.sample(range(100), repsize)

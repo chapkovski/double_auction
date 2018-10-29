@@ -1,0 +1,26 @@
+{% extends 'double_auction/includes/base_block.html' %}
+{% block title %}Repository{% endblock %}
+{% block content %}
+    <div class="card">
+        <table class="table table-striped header-fixed tablecol-4">
+            <thead>
+            <tr>
+                <th>Cost</th>
+                <th>Price</th>
+                <th>Quantity</th>
+                <th>Profit</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for i,j,k,l in repository %}
+                <tr>
+                    <td class="filterable-cell">{{ i }}</td>
+                    <td class="filterable-cell">{{ j }}</td>
+                    <td class="filterable-cell">{{ k }}</td>
+                    <td class="filterable-cell">{{ l }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+{% endblock %}

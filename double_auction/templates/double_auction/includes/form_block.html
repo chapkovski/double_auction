@@ -1,0 +1,44 @@
+{% extends 'double_auction/includes/base_block.html' %}
+{% block title %}{% endblock %}
+{% block content %}
+        <table class="table table-sm table-stripped">
+            <thead>
+            <th></th>
+            <th>Price</th>
+            <th>Quantity</th>
+            </thead>
+            <tbody>
+            <tr>
+                <th>Your lask {{ player.action_name }}:</th>
+                <td>1</td>
+                <td>1</td>
+            </tr>
+            </tbody>
+        </table>
+        <form>
+            <div class="form-row">
+                <div class="form-group col-md-6 form-inline">
+                    <label for="price" class="mr-3">Price:</label>
+                    <input type="number" class="form-control" id="price" placeholder="" name="price">
+                </div>
+                <div class="form-group col-md-6 form-inline">
+                    <label for="quantity" class="mr-3">Quantity:</label>
+                    <input type="number" class="form-control" id="quantity_id"
+                           placeholder="1" readonly name="quantity">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-12">
+                    <button type="button" class="btn btn-primary btn-block btn-sm">Submit {{ player.action_name }}
+                    </button>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group col-md-12">
+                    <button type="button" class="btn btn-danger btn-block btn-sm">Retract last {{ player.action_name }}
+                    </button>
+                </div>
+            </div>
+        </form>
+
+{% endblock %}
