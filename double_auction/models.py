@@ -9,6 +9,8 @@ from django.db.models import Q
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist
+from channels import Group as ChannelGroup
+import json
 
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
          'Chapkovski@gmail.com'
@@ -38,15 +40,15 @@ class Subsession(BaseSubsession):
 
         for g in self.get_groups():
             for c in g.get_sellers():
-                for i in range(100):
-                    c.sellerrepositorys.create(quantity=1, cost=random.randint(0, 10))
                 for i in range(10):
-                    c.asks.create(price=random.random(), quantity=random.randint(0, 10))
+                    c.repos.create(quantity=1, cost=random.randint(0, 10))
+                for i in range(10):
+                    c.asks.create(price=random.randrange(3, 6), quantity=1)
                     # todo: think about quantity
 
             for b in g.get_buyers():
                 for i in range(10):
-                    b.bids.create(price=random.random(), quantity=random.randint(0, 10))
+                    b.bids.create(price=random.randrange(0, 5), quantity=1)
 
 
 class Group(BaseGroup):
@@ -118,10 +120,13 @@ class Player(BasePlayer):
             return 'buyer'
 
     def get_repo(self):
-        return self.sellerrepositorys.filter(sold=False)
+        return self.repos.all()
 
     def get_repo_html(self):
-        ...
+        repository = self.get_repo()
+        return mark_safe(render_to_string('double_auction/includes/repo_to_render.html', {
+            'repository': repository
+        }))
 
     def get_contracts(self):
         return Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
@@ -157,25 +162,20 @@ class Player(BasePlayer):
         repos = self.get_repo()
         if repos.exists():
             # todo: think about sorting here
-            # todo: if repos do not exist return someting
+            # todo: if repos do not exist return something
             print('RRRRR', repos)
             return repos[0]
 
+    def get_personal_channel_name(self):
+        return '{}_{}'.format(self.role(), self.id)
 
-class Base(djmodels.Model):
+
+class BaseRecord(djmodels.Model):
     quantity = models.IntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
-
-
-class BaseRecord(Base):
-    player = djmodels.ForeignKey(
-        to=Player,
-        related_name="%(class)ss",
-    )
+    player = djmodels.ForeignKey(to=Player,
+                                 related_name="%(class)ss", )
 
     class Meta:
         abstract = True
@@ -210,24 +210,19 @@ class Ask(BaseStatement):
     def post_create(cls, sender, instance, created, *args, **kwargs):
         if not created:
             return
-        print('IM IN SIGNAL!! of ASK')
         group = instance.player.group
         bids = Bid.active_statements.filter(player__group=group, price__gte=instance.price).order_by('created_at')
         if bids.exists():
             bid = bids.last()  ## think about it??
             item = instance.player.item_to_sell()
-            print('&&&&&&&&&', item)
-            # we convert to float because in the bd decimals are stored as strings (at least in post_save they are)
-            c = Contract(bid=bid,
-                         ask=instance,
-                         price=min([bid.price, float(instance.price)]),
-                         item=item)
-            instance.active = False
-            bid.active = False
-            item.sold = True
-            instance.save()
-            bid.save()
-            item.save()
+            if item:
+                # we convert to float because in the bd decimals are stored as strings (at least in post_save they are)
+                c = Contract.create(bid=bid,
+                                    ask=instance,
+                                    price=min([bid.price, float(instance.price)]),
+                                    item=item)
+            else:
+                print('NOTHING TO SELL')
 
 
 class Bid(BaseStatement):
@@ -242,31 +237,24 @@ class Bid(BaseStatement):
             # todo: redo all this mess
             item = ask.player.item_to_sell()
             print('******', item)
-            Contract(bid=instance,
-                     ask=ask,
-                     price=min([float(instance.price), ask.price]),
-                     item=instance.player.item_to_sell())
-            instance.active = False
-            ask.active = False
-            item.sold = True
-            instance.save()
-            ask.save()
-            item.save()
+            if item:
+                c = Contract.create(bid=instance,
+                                    ask=ask,
+                                    price=min([float(instance.price), ask.price]),
+                                    item=item)
+            else:
+                print('NOTHING TO SELL')
 
 
-class SellerRepository(BaseRecord):
+class Repo(BaseRecord):
     cost = models.FloatField()
-    sold = models.BooleanField(initial=False)
-
-
-class BuyerRepository(BaseRecord):
     value = models.FloatField()
 
 
 class Contract(djmodels.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    item = djmodels.ForeignKey(to=SellerRepository)
+    item = djmodels.ForeignKey(to=Repo)
     bid = djmodels.ForeignKey(to=Bid)
     ask = djmodels.ForeignKey(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
@@ -282,20 +270,23 @@ class Contract(djmodels.Model):
             format(self.__class__.__name__, str(self.price), self.item.quantity, self.bid.player.id, self.ask.player.id)
 
     @classmethod
-    def post_create(cls, sender, instance, created, *args, **kwargs):
-        print('IM IN PRE!!! SIGNAL OF CONTRACT!!!!')
-        if not created:
-            return
-        bid, ask, item = instance.bid, instance.ask, instance.item
-        print('IM IN SIGNAL OF CONTRACT!!!!')
+    def create(cls, item, bid, ask, price):
+        contract = cls(item=item, bid=bid, ask=ask, price=price)
         bid.active = False
         ask.active = False
-        item.sold = True
+        item.player = bid.player
         ask.save()
         bid.save()
         item.save()
-
+        contract_parties = [ask.player, bid.player]
+        for p in contract_parties:
+            group = ChannelGroup(p.get_personal_channel_name())
+            group.send(
+                {'text': json.dumps({
+                    'repo': p.get_repo_html()
+                })}
+            )
+        return contract
 
 post_save.connect(Ask.post_create, sender=Ask)
 post_save.connect(Bid.post_create, sender=Bid)
-# post_save.connect(Contract.post_create, sender=Contract)

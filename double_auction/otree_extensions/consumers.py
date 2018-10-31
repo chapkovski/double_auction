@@ -13,7 +13,8 @@ class MarketTracker(JsonWebsocketConsumer):
 
     def connection_groups(self, **kwargs):
         group_name = self.get_group().get_channel_group_name()
-        return [group_name]
+        personal_channel = self.get_player().get_personal_channel_name()
+        return [group_name, personal_channel]
 
     def connect(self, message, **kwargs):
         print('someone connected')
@@ -53,9 +54,6 @@ class MarketTracker(JsonWebsocketConsumer):
                 player.bids.create(price=msg['price'], quantity=msg['quantity'])
             else:
                 player.asks.create(price=msg['price'], quantity=msg['quantity'])
-
-
-
 
         if msg['action'] == 'retract_statement':
             to_del = player.get_last_statement()
