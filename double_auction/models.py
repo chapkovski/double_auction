@@ -62,10 +62,10 @@ class Group(BaseGroup):
         return Contract.objects.filter(Q(bid__player__group=self) | Q(ask__player__group=self))
 
     def get_bids(self):
-        return Bid.active_statements.filter(player__in=self.get_buyers()).order_by('-created_at')
+        return Bid.active_statements.filter(player__group=self).order_by('-created_at')
 
     def get_asks(self):
-        return Ask.active_statements.filter(player__in=self.get_sellers()).order_by('-created_at')
+        return Ask.active_statements.filter(player__group=self).order_by('-created_at')
 
     def get_bids_html(self):
         bids = self.get_bids()
@@ -84,15 +84,6 @@ class Group(BaseGroup):
             'group': self,
         }))
 
-    def check_spread(self):
-        bid, ask = self.best_bid(), self.best_ask()
-        print('BID, ASK', bid, ask)
-        if all([bid, ask]):
-            if bid.price >= ask.price:
-                # perhaps sort them based on time of creation? and determine the price based on latest of two events
-                contract = Contract.create(bid=bid, ask=ask, price=min([bid.price, ask.price]))
-                return contract
-
     def non_empty_buyer_exists(self) -> bool:
         ...
 
@@ -103,14 +94,14 @@ class Group(BaseGroup):
         return not all(self.non_empty_buyer_exists(), self.non_empty_seller_exists())
 
     def best_ask(self):
-        bests = self.get_asks().order_by('-price')
+        bests = self.get_asks().order_by('price')
         if bests.exists():
             return bests.first()
 
     def best_bid(self):
         bests = self.get_bids().order_by('price')
         if bests.exists():
-            return bests.first()
+            return bests.last()
 
 
 class Player(BasePlayer):
@@ -199,11 +190,38 @@ class BaseStatement(BaseRecord):
 
 
 class Ask(BaseStatement):
-    pass
+    @classmethod
+    def post_create(cls, sender, instance, created, *args, **kwargs):
+        if not created:
+            return
+        group = instance.player.group
+        bids = Bid.active_statements.filter(player__group=group, price__gte=instance.price).order_by('created_at')
+        if bids.exists():
+            bid = bids.last()  ## think about it??
+            # we convert to float because in the bd decimals are stored as strings (at least in post_save they are)
+            c = Contract(bid=bid, ask=instance, price=min([bid.price, float(instance.price)]),
+                         quantity=instance.quantity)
+            print('CONTRACT::', c)
+            bid.active = False
+            bid.save()
+            instance.active = False
+            instance.save()
 
 
 class Bid(BaseStatement):
-    pass
+    @classmethod
+    def post_create(cls, sender, instance, created, *args, **kwargs):
+        if not created:
+            return
+        group = instance.player.group
+        asks = Ask.active_statements.filter(player__group=group, price__lte=instance.price).order_by('created_at')
+        if asks.exists():
+            ask = asks.last()  ## think about it??
+            Contract(bid=instance, ask=ask, price=min([float(instance.price), ask.price]), quantity=instance.quantity)
+            ask.active = False
+            ask.save()
+            instance.active = False
+            instance.save()
 
 
 class SellerRepository(BaseRecord):
@@ -226,15 +244,14 @@ class Contract(Base):
     def get_buyer(self):
         return self.bid.player
 
-    @classmethod
-    def post_create(cls, sender, instance, created, *args, **kwargs):
-        if not created:
-            return
-        # when contract is created bid and ask that are involved get passive
-        instance.bid.active = False
-        instance.bid.save()
-        instance.ask.active = False
-        instance.save()
 
 
-post_save.connect(Contract.post_create, sender=Contract)
+    def __str__(self):
+        return '{}. Price:{}, Quantity:{}. BID by: {}. ASK BY: {}'. \
+            format(self.__class__.__name__, str(self.price), self.quantity, self.bid.player.id, self.ask.player.id)
+
+
+
+post_save.connect(Ask.post_create, sender=Ask)
+
+post_save.connect(Bid.post_create, sender=Bid)

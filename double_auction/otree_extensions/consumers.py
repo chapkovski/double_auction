@@ -53,13 +53,9 @@ class MarketTracker(JsonWebsocketConsumer):
                 player.bids.create(price=msg['price'], quantity=msg['quantity'])
             else:
                 player.asks.create(price=msg['price'], quantity=msg['quantity'])
-            contract = group.check_spread()
-            print('CONTRACT MTHFCUKCK!!', contract)
-            if contract:
-                seller = contract.get_seller()
-                buyer = contract.get_buyer()
-                self.group_send(seller.group_name(), {'repository': seller.get_repo_html()})
-                self.group_send(buyer.group_name(), {'repository': buyer.get_repo_html()})
+
+
+
 
         if msg['action'] == 'retract_statement':
             to_del = player.get_last_statement()
