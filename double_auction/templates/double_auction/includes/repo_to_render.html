@@ -1,8 +1,8 @@
-{% for i,j,k,l in repository %}
+{% for r in repository %}
     <tr>
-        <td class="filterable-cell">{{ i }}</td>
-        <td class="filterable-cell">{{ j }}</td>
-        <td class="filterable-cell">{{ k }}</td>
-        <td class="filterable-cell">{{ l }}</td>
+        <td class="filterable-cell">{{ r.cost }}</td>
+        <td class="filterable-cell">{{ 1 }}</td>
+        <td class="filterable-cell">{{ r.quantity }}</td>
+        <td class="filterable-cell">{{ 1 }}</td>
     </tr>
 {% endfor %}

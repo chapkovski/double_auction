@@ -23,6 +23,7 @@ Instructions are mostly taken from http://veconlab.econ.virginia.edu/da/da.php, 
 class Constants(BaseConstants):
     name_in_url = 'double_auction'
     players_per_group = 3
+
     num_rounds = 1
     units_per_seller = 3
     units_per_buyer = 3
@@ -37,8 +38,11 @@ class Subsession(BaseSubsession):
 
         for g in self.get_groups():
             for c in g.get_sellers():
+                for i in range(100):
+                    c.sellerrepositorys.create(quantity=1, cost=random.randint(0, 10))
                 for i in range(10):
                     c.asks.create(price=random.random(), quantity=random.randint(0, 10))
+                    # todo: think about quantity
 
             for b in g.get_buyers():
                 for i in range(10):
@@ -113,6 +117,9 @@ class Player(BasePlayer):
         else:
             return 'buyer'
 
+    def get_repo(self):
+        return self.sellerrepositorys.filter(sold=False)
+
     def get_repo_html(self):
         ...
 
@@ -145,6 +152,14 @@ class Player(BasePlayer):
         except ObjectDoesNotExist:
             # todo: think a bit what happens if last bid is non existent?
             return
+
+    def item_to_sell(self):
+        repos = self.get_repo()
+        if repos.exists():
+            # todo: think about sorting here
+            # todo: if repos do not exist return someting
+            print('RRRRR', repos)
+            return repos[0]
 
 
 class Base(djmodels.Model):
@@ -190,22 +205,29 @@ class BaseStatement(BaseRecord):
 
 
 class Ask(BaseStatement):
+    # TODO: move both sginsls (ask, bid) under one method
     @classmethod
     def post_create(cls, sender, instance, created, *args, **kwargs):
         if not created:
             return
+        print('IM IN SIGNAL!! of ASK')
         group = instance.player.group
         bids = Bid.active_statements.filter(player__group=group, price__gte=instance.price).order_by('created_at')
         if bids.exists():
             bid = bids.last()  ## think about it??
+            item = instance.player.item_to_sell()
+            print('&&&&&&&&&', item)
             # we convert to float because in the bd decimals are stored as strings (at least in post_save they are)
-            c = Contract(bid=bid, ask=instance, price=min([bid.price, float(instance.price)]),
-                         quantity=instance.quantity)
-            print('CONTRACT::', c)
-            bid.active = False
-            bid.save()
+            c = Contract(bid=bid,
+                         ask=instance,
+                         price=min([bid.price, float(instance.price)]),
+                         item=item)
             instance.active = False
+            bid.active = False
+            item.sold = True
             instance.save()
+            bid.save()
+            item.save()
 
 
 class Bid(BaseStatement):
@@ -217,11 +239,19 @@ class Bid(BaseStatement):
         asks = Ask.active_statements.filter(player__group=group, price__lte=instance.price).order_by('created_at')
         if asks.exists():
             ask = asks.last()  ## think about it??
-            Contract(bid=instance, ask=ask, price=min([float(instance.price), ask.price]), quantity=instance.quantity)
-            ask.active = False
-            ask.save()
+            # todo: redo all this mess
+            item = ask.player.item_to_sell()
+            print('******', item)
+            Contract(bid=instance,
+                     ask=ask,
+                     price=min([float(instance.price), ask.price]),
+                     item=instance.player.item_to_sell())
             instance.active = False
+            ask.active = False
+            item.sold = True
             instance.save()
+            ask.save()
+            item.save()
 
 
 class SellerRepository(BaseRecord):
@@ -233,7 +263,10 @@ class BuyerRepository(BaseRecord):
     value = models.FloatField()
 
 
-class Contract(Base):
+class Contract(djmodels.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    item = djmodels.ForeignKey(to=SellerRepository)
     bid = djmodels.ForeignKey(to=Bid)
     ask = djmodels.ForeignKey(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
@@ -244,14 +277,25 @@ class Contract(Base):
     def get_buyer(self):
         return self.bid.player
 
-
-
     def __str__(self):
         return '{}. Price:{}, Quantity:{}. BID by: {}. ASK BY: {}'. \
-            format(self.__class__.__name__, str(self.price), self.quantity, self.bid.player.id, self.ask.player.id)
+            format(self.__class__.__name__, str(self.price), self.item.quantity, self.bid.player.id, self.ask.player.id)
 
+    @classmethod
+    def post_create(cls, sender, instance, created, *args, **kwargs):
+        print('IM IN PRE!!! SIGNAL OF CONTRACT!!!!')
+        if not created:
+            return
+        bid, ask, item = instance.bid, instance.ask, instance.item
+        print('IM IN SIGNAL OF CONTRACT!!!!')
+        bid.active = False
+        ask.active = False
+        item.sold = True
+        ask.save()
+        bid.save()
+        item.save()
 
 
 post_save.connect(Ask.post_create, sender=Ask)
-
 post_save.connect(Bid.post_create, sender=Bid)
+# post_save.connect(Contract.post_create, sender=Contract)

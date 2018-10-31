@@ -9,16 +9,11 @@ class Market(Page):
 
     def vars_for_template(self):
         tempasks = [{'price': 1, 'quantity': '2'}, {'price': 1, 'quantity': '2'}]
-        repsize = random.randint(30, 60)
-        a = random.sample(range(100), repsize)
-        b = random.sample(range(100), repsize)
-        c = random.sample(range(100), repsize)
-        d = random.sample(range(100), repsize)
-        repository = zip(a, b, c, d)
+
         return {
             'bids': self.group.get_bids(),
             'asks': self.group.get_asks(),
-            'repository': repository
+            'repository': self.player.get_repo()
         }
 
 
