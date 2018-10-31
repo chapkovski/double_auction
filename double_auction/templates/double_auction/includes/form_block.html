@@ -1,44 +1,26 @@
 {% extends 'double_auction/includes/base_block.html' %}
 {% block title %}{% endblock %}
 {% block content %}
-        <table class="table table-sm table-stripped">
-            <thead>
-            <th></th>
-            <th>Price</th>
-            <th>Quantity</th>
-            </thead>
-            <tbody>
-            <tr>
-                <th>Your lask {{ player.action_name }}:</th>
-                <td id="last_statement_price">{% if player.get_last_statement %} {{ player.get_last_statement.price }}{% endif %}</td>
-                <td id="last_statement_quantity">{% if player.get_last_statement %} {{ player.get_last_statement.quantity }}{% endif %}</td>
-            </tr>
-            </tbody>
-        </table>
-         <form action="" method="post" role="form" id="form" autocomplete="off">{% csrf_token %}
-            <div class="form-row">
-                <div class="form-group col-md-6 form-inline">
-                    <label for="price" class="mr-3">Price:</label>
-                    <input type="number" class="form-control" id="price" placeholder="" name="price">
-                </div>
-                <div class="form-group col-md-6 form-inline">
-                    <label for="quantity_id" class="mr-3">Quantity:</label>
-                    <input type="number" class="form-control" id="quantity_id"
-                           placeholder="1" readonly="true" name="quantity" value="1">
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group col-md-12">
-                    <button type="button" class="btn btn-primary btn-block btn-sm" id="submit_statement">Submit {{ player.action_name }}
-                    </button>
-                </div>
-            </div>
-            <div class="form-row">
-                <div class="form-group col-md-12">
-                    <button type="button" class="btn btn-danger btn-block btn-sm" id="retract_statement">Retract last {{ player.action_name }}
-                    </button>
-                </div>
-            </div>
-        </form>
+    <table class="table table-sm table-stripped">
+        <thead>
+        <th></th>
+        <th>Price</th>
+        <th>Quantity</th>
+        </thead>
+        <tbody>
+        <tr>
+            <th>Your lask {{ player.action_name }}:</th>
+            <td id="last_statement_price">{% if player.get_last_statement %}
+                {{ player.get_last_statement.price }}{% endif %}</td>
+            <td id="last_statement_quantity">{% if player.get_last_statement %}
+                {{ player.get_last_statement.quantity }}{% endif %}</td>
+        </tr>
+        </tbody>
+    </table>
+    <form action="" method="post" role="form" id="form" autocomplete="off">{% csrf_token %}
+        <div class="form_container">
+            {% include 'double_auction/includes/form_to_render.html' %}
+        </div>
+    </form>
 
 {% endblock %}

@@ -4,13 +4,14 @@ from otree.api import (
 )
 from django.db import models as djmodels
 import random
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_save
 from django.db.models import Q
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist
 from channels import Group as ChannelGroup
 import json
+from .exceptions import NotEnoughFunds, NotEnoughItemsToSell
 
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
          'Chapkovski@gmail.com'
@@ -39,6 +40,8 @@ class Subsession(BaseSubsession):
     def creating_session(self):
 
         for g in self.get_groups():
+            for b in g.get_buyers():
+                b.endowment = random.randrange(100, 200)
             for c in g.get_sellers():
                 for i in range(10):
                     c.repos.create(quantity=1, cost=random.randint(0, 10))
@@ -128,14 +131,29 @@ class Player(BasePlayer):
             'repository': repository
         }))
 
+    def get_form_context(self):
+        if self.role() == 'buyer':
+            no_statements = not self.get_bids().exists()
+            no_repo_or_funds = self.endowment is None or self.endowment <= 0
+        else:
+            no_repo_or_funds = not self.get_repo().exists()
+            no_statements = not self.get_asks().exists()
+        return {'no_repo_or_funds': no_repo_or_funds,
+                'no_statements': no_statements, }
+
+    def get_form_html(self):
+        context = self.get_form_context()
+        context['player'] = self
+        return mark_safe(render_to_string('double_auction/includes/form_to_render.html', context))
+
     def get_contracts(self):
         return Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
 
     def get_bids(self):
-        ...
+        return self.bids.all()
 
     def get_asks(self):
-        ...
+        return self.asks.all()
 
     def is_buyer_repository_available(self):
         ...
@@ -205,9 +223,14 @@ class BaseStatement(BaseRecord):
 
 
 class Ask(BaseStatement):
+    @classmethod
+    def pre_save(cls, sender, instance, *args, **kwargs):
+        if instance.player.get_repo().count() < int(instance.quantity):
+            raise NotEnoughItemsToSell
+
     # TODO: move both sginsls (ask, bid) under one method
     @classmethod
-    def post_create(cls, sender, instance, created, *args, **kwargs):
+    def post_save(cls, sender, instance, created, *args, **kwargs):
         if not created:
             return
         group = instance.player.group
@@ -227,7 +250,12 @@ class Ask(BaseStatement):
 
 class Bid(BaseStatement):
     @classmethod
-    def post_create(cls, sender, instance, created, *args, **kwargs):
+    def pre_save(cls, sender, instance, *args, **kwargs):
+        if instance.player.endowment <= float(instance.price) * int(instance.quantity):
+            raise NotEnoughFunds
+
+    @classmethod
+    def post_save(cls, sender, instance, created, *args, **kwargs):
         if not created:
             return
         group = instance.player.group
@@ -243,6 +271,7 @@ class Bid(BaseStatement):
                                     price=min([float(instance.price), ask.price]),
                                     item=item)
             else:
+                # todo: deal with it
                 print('NOTHING TO SELL')
 
 
@@ -288,5 +317,8 @@ class Contract(djmodels.Model):
             )
         return contract
 
-post_save.connect(Ask.post_create, sender=Ask)
-post_save.connect(Bid.post_create, sender=Bid)
+
+post_save.connect(Ask.post_save, sender=Ask)
+post_save.connect(Bid.post_save, sender=Bid)
+pre_save.connect(Ask.pre_save, sender=Ask)
+pre_save.connect(Bid.pre_save, sender=Bid)

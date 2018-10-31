@@ -2,6 +2,7 @@ from channels.generic.websockets import JsonWebsocketConsumer
 import random
 from double_auction.models import Constants, Player, Group
 import json
+from double_auction.exceptions import NotEnoughFunds, NotEnoughItemsToSell
 
 
 class MarketTracker(JsonWebsocketConsumer):
@@ -41,19 +42,25 @@ class MarketTracker(JsonWebsocketConsumer):
         # todo: check if a seller has items in repository left. If not, send a signal so he can be forwarded to wp
         # todo: check if contract can be done. If yes, update repo and money for both seller and buyer. Send them
         # ... both some info regarding their repos to update corresponding containers, money/profit/ areas
-
+        # todo: remove bids and asks of passive players (those who have no money or items to sell)
         # todo: validate correct price is inserted
         # todo: config quantity (more than 1 if settings are set for that)
-        # todo: disabling buttons if new statements can't be made or no retraction possible (no bids are made)
+
         # todo: syncrhonize timers among the entire group!
 
 
 
         if msg['action'] == 'new_statement':
             if player.role() == 'buyer':
-                player.bids.create(price=msg['price'], quantity=msg['quantity'])
+                try:
+                    player.bids.create(price=msg['price'], quantity=msg['quantity'])
+                except NotEnoughFunds:
+                    print('not enough funds')
             else:
-                player.asks.create(price=msg['price'], quantity=msg['quantity'])
+                try:
+                    player.asks.create(price=msg['price'], quantity=msg['quantity'])
+                except NotEnoughItemsToSell:
+                    print('not enough items to sell')
 
         if msg['action'] == 'retract_statement':
             to_del = player.get_last_statement()
@@ -62,9 +69,11 @@ class MarketTracker(JsonWebsocketConsumer):
         asks = group.get_asks_html()
         bids = group.get_bids_html()
         spread = group.get_spread_html()
+        form = player.get_form_html()
         self.group_send(group.get_channel_group_name(), {'asks': asks,
                                                          'bids': bids,
-                                                         'spread': spread})
+                                                         'spread': spread,
+                                                         'form': form})
         last_statement = player.get_last_statement()
         if last_statement:
             self.send({'last_statement': last_statement.as_dict()})

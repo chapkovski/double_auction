@@ -7,24 +7,27 @@
         var ws_scheme = window.location.protocol == "https:" ? "wss" : "ws";
         var ws_path = ws_scheme + '://' + window.location.host + "/market_channel/{{ player.id }}/{{ group.pk }}";
         var socket = new ReconnectingWebSocket(ws_path);
-        var $price_inp = $('input#price');
-        var $quantity_inp = $('input#quantity_id');
+
 
         var $asks_container = $('tbody.asks_container');
         var $bids_container = $('tbody.bids_container');
         var $spread_container = $('tbody.spread_container');
         var $repo_container = $('tbody.repo_container');
+        var $form_container = $('div.form_container');
         socket.onmessage = function (event) {
             var obj = jQuery.parseJSON(event.data);
             l(obj);
+            {#            l('=====');#}
+            {#            l(obj.form);#}
             $asks_container.html(obj.asks);
             $bids_container.html(obj.bids);
             $spread_container.html(obj.spread);
             $repo_container.html(obj.repo);
+            $form_container.html(obj.form);
             var has_last_statement = obj.hasOwnProperty('last_statement');
 
 
-            if (has_last_statement ){
+            if (has_last_statement) {
                 var last_statement = obj.last_statement;
                 $('#last_statement_price').html(last_statement.price);
                 $('#last_statement_quantity').html(last_statement.quantity);
@@ -34,7 +37,9 @@
             }
 
         };
-        $("button#submit_statement").on("click", function () {
+        $('form').on('click', 'button#submit_statement', function () {
+            var $price_inp = $('input#price');
+            var $quantity_inp = $('input#quantity_id');
             var msg = {
                 'action': 'new_statement',
                 'type': statement_type,
@@ -47,7 +52,8 @@
             ;
             $price_inp.val('');
         });
-        $("button#retract_statement").on("click", function () {
+        $('form').on('click', 'button#retract_statement', function () {
+
             var msg = {
                 'action': 'retract_statement',
 
@@ -57,6 +63,7 @@
             }
             ;
         });
+
 
     })
     ;
