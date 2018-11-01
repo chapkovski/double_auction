@@ -13,16 +13,18 @@
         var $bids_container = $('tbody.bids_container');
         var $spread_container = $('tbody.spread_container');
         var $repo_container = $('tbody.repo_container');
+        var $contracts_container = $('tbody.contracts_container');
         var $form_container = $('div.form_container');
         socket.onmessage = function (event) {
             var obj = jQuery.parseJSON(event.data);
             l(obj);
-            {#            l('=====');#}
-            {#            l(obj.form);#}
+            l('=====');
+            l(obj.contracts);
             $asks_container.html(obj.asks);
             $bids_container.html(obj.bids);
             $spread_container.html(obj.spread);
             $repo_container.html(obj.repo);
+            $contracts_container.html(obj.contracts);
             $form_container.html(obj.form);
             var has_last_statement = obj.hasOwnProperty('last_statement');
 

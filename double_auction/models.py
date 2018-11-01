@@ -131,6 +131,7 @@ class Player(BasePlayer):
         return self.slots.all()
 
     def has_free_slots(self):
+
         return self.slots.filter(item__isnull=True).exists()
 
     def get_free_slot(self):
@@ -141,29 +142,38 @@ class Player(BasePlayer):
         return self.slots.filter(item__isnull=False)
 
     def get_repo_context(self):
-        repository = self.get_slots()
+        repository = self.get_slots().annotate(quantity=F('item__quantity'))
         if self.role() == 'seller':
-            r = repository.annotate(price=F('item__contract__price'),
-                                    profit=ExpressionWrapper(
-                                        (F('item__contract__price') - F('cost')) * F('item__quantity'),
-                                        output_field=models.FloatField()),
-                                    quantity=F('item__quantity'),
-                                    ).order_by('cost')
-
+            r = repository.order_by('cost')
         else:
-            r = repository.annotate(price=F('item__contract__price'),
-                                    profit=ExpressionWrapper(
-                                        (F('value') - F('item__contract__price')) * F('item__quantity'),
-                                        output_field=models.FloatField()),
-                                    quantity=F('item__quantity'),
-                                    ).order_by('value')
-
+            r = repository.order_by('-value')
         return r
 
     def get_repo_html(self):
-
         return mark_safe(render_to_string('double_auction/includes/repo_to_render.html', {
             'repository': self.get_repo_context()
+        }))
+
+    def get_contracts_context(self):
+        contracts = Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
+        if self.role() == 'seller':
+            cost_value = F('cost')
+            formula = (F('item__contract__price') - cost_value) * F('item__quantity')
+        else:
+            cost_value = F('value')
+            formula = (cost_value - F('item__contract__price')) * F('item__quantity')
+
+        r = contracts.annotate(profit=ExpressionWrapper(formula,
+                                                        output_field=models.CurrencyField()),
+                               cost_value=cost_value,
+                               )
+
+        return r
+
+    def get_contracts_html(self):
+
+        return mark_safe(render_to_string('double_auction/includes/contracts_to_render.html', {
+            'contracts': self.get_contracts_context()
         }))
 
     def get_form_context(self):
@@ -173,7 +183,7 @@ class Player(BasePlayer):
         else:
             no_slots_or_funds = not self.get_full_slots().exists()
             no_statements = not self.get_asks().exists()
-        return {'no_slots_or_funds ': no_slots_or_funds,
+        return {'no_slots_or_funds': no_slots_or_funds,
                 'no_statements': no_statements, }
 
     def get_form_html(self):
@@ -251,7 +261,10 @@ class BaseStatement(BaseRecord):
 class Ask(BaseStatement):
     @classmethod
     def pre_save(cls, sender, instance, *args, **kwargs):
-        num_items_available = Item.objects.filter(slot__owner=instance.player).aggregate(num_items=Sum('quantity'))
+        items_available = Item.objects.filter(slot__owner=instance.player)
+        if items_available.count() == 0:
+            raise NotEnoughItemsToSell
+        num_items_available = items_available.aggregate(num_items=Sum('quantity'))
         if num_items_available['num_items'] < int(instance.quantity):
             raise NotEnoughItemsToSell
 
@@ -261,8 +274,10 @@ class Ask(BaseStatement):
         if not created:
             return
         group = instance.player.group
+        print('IM IN POST SAVE OF ASK!')
         bids = Bid.active_statements.filter(player__group=group, price__gte=instance.price).order_by('created_at')
         if bids.exists():
+            print('GONNA CREATE CONTRACT!!!!!!')
             bid = bids.last()  ## think about it??
             item = instance.player.item_to_sell()
             if item:
@@ -292,6 +307,7 @@ class Bid(BaseStatement):
             # todo: redo all this mess
             item = ask.player.item_to_sell()
             if item:
+                print('GONNA CREATE CONTRACT!!!!!! FROM BID!!!!')
                 Contract.create(bid=instance,
                                 ask=ask,
                                 price=min([float(instance.price), ask.price]),
@@ -324,6 +340,8 @@ class Contract(djmodels.Model):
     bid = djmodels.OneToOneField(to=Bid)
     ask = djmodels.OneToOneField(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
+    cost = models.CurrencyField()
+    value = models.CurrencyField()
 
     def get_seller(self):
         return self.ask.player
@@ -337,24 +355,32 @@ class Contract(djmodels.Model):
 
     @classmethod
     def create(cls, item, bid, ask, price):
-        contract = cls(item=item, bid=bid, ask=ask, price=price)
-        bid.active = False
-        ask.active = False
+        # todo: check if buyer has funds
+        # todo: check if buyer has free slots
         buyer = bid.player
         seller = ask.player
-        if buyer.has_free_slots():
-            item.slot = buyer.get_free_slot()
+        cost = item.slot.cost
+        new_slot = buyer.get_free_slot()
+        item.slot = new_slot
+        value = new_slot.value
+        contract = cls(item=item, bid=bid, ask=ask, price=price, cost=cost, value=value)
+        bid.active = False
+        ask.active = False
         ask.save()
         bid.save()
         item.save()
         contract_parties = [buyer, seller]
+        contract.save()
         for p in contract_parties:
             group = ChannelGroup(p.get_personal_channel_name())
             group.send(
                 {'text': json.dumps({
-                    'repo': p.get_repo_html()
+                    'repo': p.get_repo_html(),
+                    'contracts': p.get_contracts_html(),
+
                 })}
             )
+
         return contract
 
 

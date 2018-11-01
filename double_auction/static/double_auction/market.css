@@ -7,7 +7,7 @@
     min-height:40vh;
 }
 .bottomrow{
-    min-height:50vh;
+    min-height:30vh;
 }
 
 .header-fixed {
@@ -33,7 +33,7 @@
 
 .header-fixed > tbody {
     overflow-y: auto;
-    height: 300px;
+    height: 200px;
 }
 
 .header-fixed > tbody > tr > td,

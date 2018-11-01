@@ -12,6 +12,8 @@ class Market(Page):
         c['asks'] = self.group.get_asks()
         c['bids'] = self.group.get_bids()
         c['repository'] = self.player.get_repo_context()
+        c['contracts'] = self.player.get_contracts_context()
+
         return c
 
 

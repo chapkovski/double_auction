@@ -77,12 +77,18 @@ class MarketTracker(JsonWebsocketConsumer):
                 to_del.delete()
         asks = group.get_asks_html()
         bids = group.get_bids_html()
+
+
         spread = group.get_spread_html()
-        form = player.get_form_html()
+
         self.group_send(group.get_channel_group_name(), {'asks': asks,
                                                          'bids': bids,
                                                          'spread': spread,
-                                                         'form': form})
+                                                         })
+
         last_statement = player.get_last_statement()
         if last_statement:
             self.send({'last_statement': last_statement.as_dict()})
+        for p in group.get_players():
+            form = p.get_form_html()
+            self.group_send(p.get_personal_channel_name(), {'form': form})
