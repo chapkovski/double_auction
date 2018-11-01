@@ -2,15 +2,17 @@ from otree.api import (
     models, widgets, BaseConstants, BaseSubsession, BaseGroup, BasePlayer,
     Currency as c, currency_range
 )
-from django.db import models as djmodels
 import random
+import json
+from django.db import models as djmodels
+from django.db.models import F, Q, Sum, ExpressionWrapper
 from django.db.models.signals import post_save, pre_save
-from django.db.models import Q
+
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist
 from channels import Group as ChannelGroup
-import json
+
 from .exceptions import NotEnoughFunds, NotEnoughItemsToSell
 
 author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
@@ -34,24 +36,24 @@ class Constants(BaseConstants):
     multiple_unit_trading = True
     price_max_numbers = 10
     price_digits = 2
+    initial_quantity = 1  # TODO: to change later for multiple quantities
 
 
 class Subsession(BaseSubsession):
     def creating_session(self):
-
         for g in self.get_groups():
-            for b in g.get_buyers():
-                b.endowment = random.randrange(100, 200)
             for c in g.get_sellers():
-                for i in range(10):
-                    c.repos.create(quantity=1, cost=random.randint(0, 10))
-                for i in range(10):
-                    c.asks.create(price=random.randrange(3, 6), quantity=1)
-                    # todo: think about quantity
+                # we create slots for both sellers and buyers, but for sellers we fill them with items
+                # and also pregenerate costs. For buyers they are initially empty
+                for i in range(Constants.units_per_seller):
+                    slot = c.slots.create(cost=random.randint(0, 10))
+                    item = Item(slot=slot, quantity=Constants.initial_quantity)
+                    item.save()
 
             for b in g.get_buyers():
-                for i in range(10):
-                    b.bids.create(price=random.randrange(0, 5), quantity=1)
+                for i in range(Constants.units_per_buyer):
+                    b.endowment = random.randrange(100, 200)
+                    b.slots.create(value=random.randint(0, 10))
 
 
 class Group(BaseGroup):
@@ -122,23 +124,56 @@ class Player(BasePlayer):
         else:
             return 'buyer'
 
-    def get_repo(self):
-        return self.repos.all()
+    def get_items(self):
+        return Item.objects.filter(slot__owner=self)
+
+    def get_slots(self):
+        return self.slots.all()
+
+    def has_free_slots(self):
+        return self.slots.filter(item__isnull=True).exists()
+
+    def get_free_slot(self):
+        if self.has_free_slots():
+            return self.slots.filter(item__isnull=True).order_by('-value').first()
+
+    def get_full_slots(self):
+        return self.slots.filter(item__isnull=False)
+
+    def get_repo_context(self):
+        repository = self.get_slots()
+        if self.role() == 'seller':
+            r = repository.annotate(price=F('item__contract__price'),
+                                    profit=ExpressionWrapper(
+                                        (F('item__contract__price') - F('cost')) * F('item__quantity'),
+                                        output_field=models.FloatField()),
+                                    quantity=F('item__quantity'),
+                                    ).order_by('cost')
+
+        else:
+            r = repository.annotate(price=F('item__contract__price'),
+                                    profit=ExpressionWrapper(
+                                        (F('value') - F('item__contract__price')) * F('item__quantity'),
+                                        output_field=models.FloatField()),
+                                    quantity=F('item__quantity'),
+                                    ).order_by('value')
+
+        return r
 
     def get_repo_html(self):
-        repository = self.get_repo()
+
         return mark_safe(render_to_string('double_auction/includes/repo_to_render.html', {
-            'repository': repository
+            'repository': self.get_repo_context()
         }))
 
     def get_form_context(self):
         if self.role() == 'buyer':
             no_statements = not self.get_bids().exists()
-            no_repo_or_funds = self.endowment is None or self.endowment <= 0
+            no_slots_or_funds = self.endowment <= 0 or not self.has_free_slots()
         else:
-            no_repo_or_funds = not self.get_repo().exists()
+            no_slots_or_funds = not self.get_full_slots().exists()
             no_statements = not self.get_asks().exists()
-        return {'no_repo_or_funds': no_repo_or_funds,
+        return {'no_slots_or_funds ': no_slots_or_funds,
                 'no_statements': no_statements, }
 
     def get_form_html(self):
@@ -154,12 +189,6 @@ class Player(BasePlayer):
 
     def get_asks(self):
         return self.asks.all()
-
-    def is_buyer_repository_available(self):
-        ...
-
-    def seller_has_money(self):
-        ...
 
     def action_name(self):
         if self.role() == 'buyer':
@@ -177,12 +206,9 @@ class Player(BasePlayer):
             return
 
     def item_to_sell(self):
-        repos = self.get_repo()
-        if repos.exists():
-            # todo: think about sorting here
-            # todo: if repos do not exist return something
-            print('RRRRR', repos)
-            return repos[0]
+        full_slots = self.get_full_slots().order_by('cost')
+        if full_slots.exists():
+            return full_slots.first().item
 
     def get_personal_channel_name(self):
         return '{}_{}'.format(self.role(), self.id)
@@ -225,7 +251,8 @@ class BaseStatement(BaseRecord):
 class Ask(BaseStatement):
     @classmethod
     def pre_save(cls, sender, instance, *args, **kwargs):
-        if instance.player.get_repo().count() < int(instance.quantity):
+        num_items_available = Item.objects.filter(slot__owner=instance.player).aggregate(num_items=Sum('quantity'))
+        if num_items_available['num_items'] < int(instance.quantity):
             raise NotEnoughItemsToSell
 
     # TODO: move both sginsls (ask, bid) under one method
@@ -240,10 +267,10 @@ class Ask(BaseStatement):
             item = instance.player.item_to_sell()
             if item:
                 # we convert to float because in the bd decimals are stored as strings (at least in post_save they are)
-                c = Contract.create(bid=bid,
-                                    ask=instance,
-                                    price=min([bid.price, float(instance.price)]),
-                                    item=item)
+                Contract.create(bid=bid,
+                                ask=instance,
+                                price=min([bid.price, float(instance.price)]),
+                                item=item)
             else:
                 print('NOTHING TO SELL')
 
@@ -264,27 +291,36 @@ class Bid(BaseStatement):
             ask = asks.last()  ## think about it??
             # todo: redo all this mess
             item = ask.player.item_to_sell()
-            print('******', item)
             if item:
-                c = Contract.create(bid=instance,
-                                    ask=ask,
-                                    price=min([float(instance.price), ask.price]),
-                                    item=item)
+                Contract.create(bid=instance,
+                                ask=ask,
+                                price=min([float(instance.price), ask.price]),
+                                item=item)
             else:
                 # todo: deal with it
                 print('NOTHING TO SELL')
 
 
-class Repo(BaseRecord):
-    cost = models.FloatField()
-    value = models.FloatField()
+class Slot(djmodels.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    owner = djmodels.ForeignKey(to=Player, related_name="slots", )
+    cost = models.FloatField(doc='this is defined for sellers only', null=True)
+    value = models.FloatField(doc='for buyers only', null=True)
+
+
+class Item(djmodels.Model):
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    slot = djmodels.OneToOneField(to=Slot, related_name='item')
+    quantity = models.IntegerField()
 
 
 class Contract(djmodels.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     # the o2o field to item should be reconsidered if we make quantity flexible
-    item = djmodels.OneToOneField(to=Repo)
+    item = djmodels.OneToOneField(to=Item)
     bid = djmodels.OneToOneField(to=Bid)
     ask = djmodels.OneToOneField(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
@@ -304,11 +340,14 @@ class Contract(djmodels.Model):
         contract = cls(item=item, bid=bid, ask=ask, price=price)
         bid.active = False
         ask.active = False
-        item.player = bid.player
+        buyer = bid.player
+        seller = ask.player
+        if buyer.has_free_slots():
+            item.slot = buyer.get_free_slot()
         ask.save()
         bid.save()
         item.save()
-        contract_parties = [ask.player, bid.player]
+        contract_parties = [buyer, seller]
         for p in contract_parties:
             group = ChannelGroup(p.get_personal_channel_name())
             group.send(

@@ -1,8 +1,16 @@
 {% for r in repository %}
     <tr>
-        <td class="filterable-cell">{{ r.cost }}</td>
-        <td class="filterable-cell">{{ 1 }}</td>
-        <td class="filterable-cell">{{ r.quantity }}</td>
-        <td class="filterable-cell">{{ 1 }}</td>
+        <td class="filterable-cell">{% if  r.owner.role == 'seller' %}
+            {{ r.cost }}
+        {% else %}
+            {{ r.value }}
+        {% endif %}
+        </td>
+        <td class="filterable-cell">{{ r.price|default_if_none:'' }}</td>
+        <td class="filterable-cell">{{ r.quantity|default_if_none:'' }}</td>
+        <td class="filterable-cell">{{ r.profit|default:'' }}</td>
     </tr>
 {% endfor %}
+
+
+

@@ -11,7 +11,7 @@ class Market(Page):
         c = self.player.get_form_context()
         c['asks'] = self.group.get_asks()
         c['bids'] = self.group.get_bids()
-        c['repository'] = self.player.get_repo()
+        c['repository'] = self.player.get_repo_context()
         return c
 
 
