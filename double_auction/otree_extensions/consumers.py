@@ -37,6 +37,15 @@ class MarketTracker(JsonWebsocketConsumer):
         print('WHAT I GOT EHRE???::::  ', msg)
         player = self.get_player()
         group = self.get_group()
+        # Some ideas:
+        # Each seller in the beginning has slots (like a deposit cells) filled with goods from his repo.
+        # Each buyer also has empty slots (deposit cells) to fill in.
+        # Each seller slot is associated with a certain cost of production.
+        # Each buyer slot is associated with a certain value of owning the item in it (sounds strange)
+        # buyer costs are associated with increasing cost of production (?)
+        # seller values with diminishing marginal value
+        # when two persons make a contract, an item is moved from  seller's cell to buyer's cell.
+        # so an item has a location field. but
         # todo: check if market is not yet closed - if yes, send a signal to proceed for all players
         # todo: check if a buyer has money left. if not, send a signal so he can be forwarded to wp
         # todo: check if a seller has items in repository left. If not, send a signal so he can be forwarded to wp
@@ -45,8 +54,8 @@ class MarketTracker(JsonWebsocketConsumer):
         # todo: remove bids and asks of passive players (those who have no money or items to sell)
         # todo: validate correct price is inserted
         # todo: config quantity (more than 1 if settings are set for that)
-
-        # todo: syncrhonize timers among the entire group!
+        # TODO: slots for buyers
+        # todo: syncrhonize timers among the entire group - via waitpage at the beginning
 
 
 

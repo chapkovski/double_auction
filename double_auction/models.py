@@ -283,9 +283,10 @@ class Repo(BaseRecord):
 class Contract(djmodels.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    item = djmodels.ForeignKey(to=Repo)
-    bid = djmodels.ForeignKey(to=Bid)
-    ask = djmodels.ForeignKey(to=Ask)
+    # the o2o field to item should be reconsidered if we make quantity flexible
+    item = djmodels.OneToOneField(to=Repo)
+    bid = djmodels.OneToOneField(to=Bid)
+    ask = djmodels.OneToOneField(to=Ask)
     price = djmodels.DecimalField(max_digits=Constants.price_max_numbers, decimal_places=Constants.price_digits)
 
     def get_seller(self):
