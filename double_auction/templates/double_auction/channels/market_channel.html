@@ -31,7 +31,7 @@
                 l(obj.presence);
                 if (obj.presence.market_over === true) {
                     $market_over_modal.find('.modal-message').html(obj.presence.over_message);
-                    $market_over_modal.modal({backdrop: 'static', keyboard: false},'show');
+                    $market_over_modal.modal({backdrop: 'static', keyboard: false}, 'show');
                     socket.close();
                 }
             }
@@ -51,17 +51,21 @@
         $form_container.on('click', 'button#submit_statement', function () {
             var $price_inp = $('input#price');
             var $quantity_inp = $('input#quantity_id');
-            var msg = {
-                'action': 'new_statement',
-                'type': statement_type,
-                'price': $price_inp.val(),
-                'quantity': $quantity_inp.val(),
-            };
-            if (socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify(msg));
+            var price = $price_inp.val();
+            {#            todo: something more sophisticated to deal with erroneous prices#}
+            if (price > 0) {
+                var msg = {
+                    'action': 'new_statement',
+                    'type': statement_type,
+                    'price': $price_inp.val(),
+                    'quantity': $quantity_inp.val(),
+                };
+                if (socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify(msg));
+                }
+                ;
+                $price_inp.val('');
             }
-            ;
-            $price_inp.val('');
         });
         $form_container.on('click', 'button#retract_statement', function () {
 
