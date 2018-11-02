@@ -57,6 +57,8 @@ class Subsession(BaseSubsession):
 
 
 class Group(BaseGroup):
+    active = models.BooleanField(initial=True)
+
     def get_channel_group_name(self):
         return 'double_auction_group_{}'.format(self.pk)
 
@@ -116,12 +118,16 @@ class Group(BaseGroup):
 
     def presence_check(self):
         msg = {'market_over': False}
-
         if self.no_buyers_left():
+            # todo: check this out later
+            self.active = False
+            self.save()
             msg = {'market_over': True,
                    'over_message': 'No buyers left'}
 
         if self.no_sellers_left():
+            self.active = False
+            self.save()
             msg = {'market_over': True,
                    'over_message': 'No sellers left'}
         return msg

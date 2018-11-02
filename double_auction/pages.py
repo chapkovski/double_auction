@@ -8,7 +8,7 @@ class Market(Page):
     timeout_seconds = Constants.time_per_round
 
     def is_displayed(self):
-        return self.player.active
+        return self.player.active and self.group.active
 
     def vars_for_template(self):
         c = self.player.get_form_context()
@@ -32,6 +32,6 @@ class Results(Page):
 
 page_sequence = [
     Market,
-    ResultsWaitPage,
-    Results
+    # ResultsWaitPage,
+    # Results
 ]
