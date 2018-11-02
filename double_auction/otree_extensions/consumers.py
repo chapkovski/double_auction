@@ -89,6 +89,5 @@ class MarketTracker(JsonWebsocketConsumer):
         last_statement = player.get_last_statement()
         if last_statement:
             self.send({'last_statement': last_statement.as_dict()})
-        for p in group.get_players():
-            form = p.get_form_html()
-            self.group_send(p.get_personal_channel_name(), {'form': form})
+
+

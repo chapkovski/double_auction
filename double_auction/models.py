@@ -95,14 +95,14 @@ class Group(BaseGroup):
             'group': self,
         }))
 
-    def non_empty_buyer_exists(self) -> bool:
-        ...
+    def no_buyers_left(self) -> bool:
+        return not any([p.active for p in self.get_buyers()])
 
-    def non_empty_seller_exists(self) -> bool:
-        ...
+    def no_sellers_left(self) -> bool:
+        return not any([p.active for p in self.get_sellers()])
 
     def is_market_closed(self) -> bool:
-        return not all(self.non_empty_buyer_exists(), self.non_empty_seller_exists())
+        return any(self.no_buyers_left(), self.no_sellers_left())
 
     def best_ask(self):
         bests = self.get_asks().order_by('price')
@@ -114,15 +114,42 @@ class Group(BaseGroup):
         if bests.exists():
             return bests.last()
 
+    def presence_check(self):
+        msg = {'market_over': False}
+
+        if self.no_buyers_left():
+            msg = {'market_over': True,
+                   'over_message': 'No buyers left'}
+
+        if self.no_sellers_left():
+            msg = {'market_over': True,
+                   'over_message': 'No sellers left'}
+        return msg
+
 
 class Player(BasePlayer):
-    endowment = models.CurrencyField()
+    active = models.BooleanField(initial=True)
+    endowment = models.CurrencyField(initial=0)
 
     def role(self):
+
         if self.id_in_group == 1:
             return 'seller'
         else:
             return 'buyer'
+
+    def set_payoff(self):
+        contracts = self.get_contracts_queryset()
+        self.payoff = self.endowment
+        if contracts:
+            sum_contracts = sum([p.profit for p in contracts])
+            self.payoff += sum_contracts
+
+    def is_active(self):
+        if self.role() == 'buyer':
+            return self.endowment > 0 and self.has_free_slots()
+        else:
+            return self.get_full_slots().exists()
 
     def get_items(self):
         return Item.objects.filter(slot__owner=self)
@@ -131,7 +158,9 @@ class Player(BasePlayer):
         return self.slots.all()
 
     def has_free_slots(self):
-
+        for s in self.slots.all():
+            print(hasattr(s, 'item'))
+        print('=====')
         return self.slots.filter(item__isnull=True).exists()
 
     def get_free_slot(self):
@@ -139,7 +168,24 @@ class Player(BasePlayer):
             return self.slots.filter(item__isnull=True).order_by('-value').first()
 
     def get_full_slots(self):
+        print('CHECK FULL SLOTS:::', self.slots.filter(item__isnull=False).count() , 'ROLE:::', self.role())
         return self.slots.filter(item__isnull=False)
+
+    def presence_check(self):
+        msg = {'market_over': False}
+
+        if not self.is_active():
+            if self.role() == 'buyer':
+                if self.endowment <= 0:
+                    msg = {'market_over': True,
+                           'over_message': 'No funds left for trading'}
+                if not self.has_free_slots():
+                    msg = {'market_over': True,
+                           'over_message': 'No slots available for trading left'}
+            else:
+                msg = {'market_over': True,
+                       'over_message': 'No items available for trading left'}
+        return msg
 
     def get_repo_context(self):
         repository = self.get_slots().annotate(quantity=F('item__quantity'))
@@ -154,8 +200,8 @@ class Player(BasePlayer):
             'repository': self.get_repo_context()
         }))
 
-    def get_contracts_context(self):
-        contracts = Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
+    def get_contracts_queryset(self):
+        contracts = self.get_contracts()
         if self.role() == 'seller':
             cost_value = F('cost')
             formula = (F('item__contract__price') - cost_value) * F('item__quantity')
@@ -163,8 +209,7 @@ class Player(BasePlayer):
             cost_value = F('value')
             formula = (cost_value - F('item__contract__price')) * F('item__quantity')
 
-        r = contracts.annotate(profit=ExpressionWrapper(formula,
-                                                        output_field=models.CurrencyField()),
+        r = contracts.annotate(profit=ExpressionWrapper(formula, output_field=models.CurrencyField()),
                                cost_value=cost_value,
                                )
 
@@ -173,7 +218,7 @@ class Player(BasePlayer):
     def get_contracts_html(self):
 
         return mark_safe(render_to_string('double_auction/includes/contracts_to_render.html', {
-            'contracts': self.get_contracts_context()
+            'contracts': self.get_contracts_queryset()
         }))
 
     def get_form_context(self):
@@ -190,6 +235,9 @@ class Player(BasePlayer):
         context = self.get_form_context()
         context['player'] = self
         return mark_safe(render_to_string('double_auction/includes/form_to_render.html', context))
+
+    def profit_block_html(self):
+        return mark_safe(render_to_string('double_auction/includes/profit_to_render.html', {'player': self}))
 
     def get_contracts(self):
         return Contract.objects.filter(Q(bid__player=self) | Q(ask__player=self))
@@ -369,17 +417,27 @@ class Contract(djmodels.Model):
         ask.save()
         bid.save()
         item.save()
+        buyer.endowment -= contract.price
         contract_parties = [buyer, seller]
         contract.save()
+
         for p in contract_parties:
-            group = ChannelGroup(p.get_personal_channel_name())
-            group.send(
+            p.set_payoff()
+            p.active = p.is_active()
+            p.save()
+            p_group = ChannelGroup(p.get_personal_channel_name())
+            p_group.send(
                 {'text': json.dumps({
                     'repo': p.get_repo_html(),
                     'contracts': p.get_contracts_html(),
-
+                    'form': p.get_form_html(),
+                    'profit': p.profit_block_html(),
+                    'presence': p.presence_check(),
                 })}
             )
+        group = buyer.group
+        group_channel = ChannelGroup(group.get_channel_group_name())
+        group_channel.send({'text': json.dumps({'presence': group.presence_check()})})
 
         return contract
 

@@ -14,13 +14,8 @@
             <td>Time remaining:</td>
             <td><span class="otree-timer__time-left"></span></td>
         </tr>
-        <tr>
-            <td>Total period profit:</td>
-            <td>1</td>
-        </tr>
-        <tr>
-            <td>Session earnings:</td>
-            <td>1</td>
-        </tr>
+        <tbody class="profit_container">
+            {% include 'double_auction/includes/profit_to_render.html' %}
+        </tbody>
     </table>
 {% endblock %}
