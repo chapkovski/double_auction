@@ -30,10 +30,10 @@ class Constants(BaseConstants):
     players_per_group = 3
 
     num_rounds = 1
-    units_per_seller = 3
-    units_per_buyer = 3
-    time_per_round = 30000
-    multiple_unit_trading = True
+    units_per_seller = 4
+    units_per_buyer = 4
+    time_per_round = 300
+    multiple_unit_trading = False
     price_max_numbers = 10
     price_digits = 2
     initial_quantity = 1  # TODO: to change later for multiple quantities
@@ -158,9 +158,6 @@ class Player(BasePlayer):
         return self.slots.all()
 
     def has_free_slots(self):
-        for s in self.slots.all():
-            print(hasattr(s, 'item'))
-        print('=====')
         return self.slots.filter(item__isnull=True).exists()
 
     def get_free_slot(self):
@@ -168,7 +165,6 @@ class Player(BasePlayer):
             return self.slots.filter(item__isnull=True).order_by('-value').first()
 
     def get_full_slots(self):
-        print('CHECK FULL SLOTS:::', self.slots.filter(item__isnull=False).count() , 'ROLE:::', self.role())
         return self.slots.filter(item__isnull=False)
 
     def presence_check(self):
@@ -322,10 +318,8 @@ class Ask(BaseStatement):
         if not created:
             return
         group = instance.player.group
-        print('IM IN POST SAVE OF ASK!')
         bids = Bid.active_statements.filter(player__group=group, price__gte=instance.price).order_by('created_at')
         if bids.exists():
-            print('GONNA CREATE CONTRACT!!!!!!')
             bid = bids.last()  ## think about it??
             item = instance.player.item_to_sell()
             if item:
@@ -355,7 +349,6 @@ class Bid(BaseStatement):
             # todo: redo all this mess
             item = ask.player.item_to_sell()
             if item:
-                print('GONNA CREATE CONTRACT!!!!!! FROM BID!!!!')
                 Contract.create(bid=instance,
                                 ask=ask,
                                 price=min([float(instance.price), ask.price]),

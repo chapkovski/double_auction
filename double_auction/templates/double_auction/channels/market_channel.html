@@ -30,11 +30,9 @@
             if (has_over_message) {
                 l(obj.presence);
                 if (obj.presence.market_over === true) {
-
                     $market_over_modal.find('.modal-message').html(obj.presence.over_message);
                     $market_over_modal.modal({backdrop: 'static', keyboard: false},'show');
                     socket.close();
-
                 }
             }
             var has_last_statement = obj.hasOwnProperty('last_statement');

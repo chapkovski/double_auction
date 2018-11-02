@@ -34,7 +34,6 @@ class MarketTracker(JsonWebsocketConsumer):
     def receive(self, text=None, bytes=None, **kwargs):
         self.clean_kwargs()
         msg = text
-        print('WHAT I GOT EHRE???::::  ', msg)
         player = self.get_player()
         group = self.get_group()
         # Some ideas:
