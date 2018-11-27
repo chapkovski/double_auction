@@ -17,12 +17,6 @@ class MarketTracker(JsonWebsocketConsumer):
         personal_channel = self.get_player().get_personal_channel_name()
         return [group_name, personal_channel]
 
-    def connect(self, message, **kwargs):
-        print('someone connected')
-
-    def disconnect(self, message, **kwargs):
-        print('someone disconnected')
-
     def get_player(self):
         self.clean_kwargs()
         return Player.objects.get(pk=self.player_pk)
@@ -44,29 +38,20 @@ class MarketTracker(JsonWebsocketConsumer):
         # buyer costs are associated with increasing cost of production (?)
         # seller values with diminishing marginal value
         # when two persons make a contract, an item is moved from  seller's cell to buyer's cell.
-        # so an item has a location field. but
-        # todo: check if market is not yet closed - if yes, send a signal to proceed for all players
-        # todo: check if a buyer has money left. if not, send a signal so he can be forwarded to wp
-        # todo: check if a seller has items in repository left. If not, send a signal so he can be forwarded to wp
-        # todo: check if contract can be done. If yes, update repo and money for both seller and buyer. Send them
-        # ... both some info regarding their repos to update corresponding containers, money/profit/ areas
-        # todo: remove bids and asks of passive players (those who have no money or items to sell)
-        # todo: validate correct price is inserted
-        # todo: config quantity (more than 1 if settings are set for that)
-        # TODO: slots for buyers
-        # todo: syncrhonize timers among the entire group - via waitpage at the beginning
 
 
 
         if msg['action'] == 'new_statement':
             if player.role() == 'buyer':
                 try:
-                    player.bids.create(price=msg['price'], quantity=msg['quantity'])
+                    bid = player.bids.create(price=msg['price'], quantity=msg['quantity'])
+
                 except NotEnoughFunds:
                     print('not enough funds')
             else:
                 try:
-                    player.asks.create(price=msg['price'], quantity=msg['quantity'])
+                    ask = player.asks.create(price=msg['price'], quantity=msg['quantity'])
+
                 except NotEnoughItemsToSell:
                     print('not enough items to sell')
 
@@ -74,19 +59,19 @@ class MarketTracker(JsonWebsocketConsumer):
             to_del = player.get_last_statement()
             if to_del:
                 to_del.delete()
-        asks = group.get_asks_html()
-        bids = group.get_bids_html()
-
 
         spread = group.get_spread_html()
+        for p in group.get_players():
+            self.group_send(p.get_personal_channel_name(), {'asks': p.get_asks_html(),
+                                                            'bids': p.get_bids_html()})
 
-        self.group_send(group.get_channel_group_name(), {'asks': asks,
-                                                         'bids': bids,
-                                                         'spread': spread,
-                                                         })
-
+        self.group_send(group.get_channel_group_name(), {
+            'spread': spread,
+        })
+        msg = dict()
         last_statement = player.get_last_statement()
+
         if last_statement:
-            self.send({'last_statement': last_statement.as_dict()})
-
-
+            msg['last_statement'] = last_statement.as_dict()
+        msg['form'] = player.get_form_html()
+        self.send(msg)

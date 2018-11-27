@@ -27,7 +27,7 @@ Instructions are mostly taken from http://veconlab.econ.virginia.edu/da/da.php, 
 
 class Constants(BaseConstants):
     name_in_url = 'double_auction'
-    players_per_group = 3
+    players_per_group = None
 
     num_rounds = 1
     units_per_seller = 4
@@ -36,24 +36,21 @@ class Constants(BaseConstants):
     multiple_unit_trading = False
     price_max_numbers = 10
     price_digits = 2
-    initial_quantity = 1  # TODO: to change later for multiple quantities
+    initial_quantity = 1
+    seller_cost_range = (1, 10)
+    buyer_value_range = (1, 10)
+    endowment_range = (10, 50)
 
 
 class Subsession(BaseSubsession):
-    def creating_session(self):
-        for g in self.get_groups():
-            for c in g.get_sellers():
-                # we create slots for both sellers and buyers, but for sellers we fill them with items
-                # and also pregenerate costs. For buyers they are initially empty
-                for i in range(Constants.units_per_seller):
-                    slot = c.slots.create(cost=random.randint(0, 10))
-                    item = Item(slot=slot, quantity=Constants.initial_quantity)
-                    item.save()
+    num_sellers = models.IntegerField()
+    num_buyers = models.IntegerField()
 
-            for b in g.get_buyers():
-                for i in range(Constants.units_per_buyer):
-                    b.endowment = random.randrange(100, 200)
-                    b.slots.create(value=random.randint(0, 10))
+    def creating_session(self):
+        self.num_buyers = self.session.config.get('buyers')
+        self.num_sellers = self.session.config.get('sellers')
+        if self.session.num_participants % (self.num_buyers + self.num_sellers) != 0:
+            raise Exception('Number of participants is not divisible by number of sellers and buyers')
 
 
 class Group(BaseGroup):
@@ -79,18 +76,6 @@ class Group(BaseGroup):
 
     def get_asks(self):
         return Ask.active_statements.filter(player__group=self).order_by('-created_at')
-
-    def get_bids_html(self):
-        bids = self.get_bids()
-        return mark_safe(render_to_string('double_auction/includes/bids_to_render.html', {
-            'bids': bids
-        }))
-
-    def get_asks_html(self):
-        asks = self.get_asks()
-        return mark_safe(render_to_string('double_auction/includes/asks_to_render.html', {
-            'asks': asks
-        }))
 
     def get_spread_html(self):
         return mark_safe(render_to_string('double_auction/includes/spread_to_render.html', {
@@ -139,7 +124,7 @@ class Player(BasePlayer):
 
     def role(self):
 
-        if self.id_in_group == 1:
+        if self.id_in_group <= self.subsession.num_sellers:
             return 'seller'
         else:
             return 'buyer'
@@ -202,6 +187,20 @@ class Player(BasePlayer):
             'repository': self.get_repo_context()
         }))
 
+    def get_asks_html(self):
+        asks = self.group.get_asks()
+        return mark_safe(render_to_string('double_auction/includes/asks_to_render.html',
+                                          {'asks': asks,
+                                           'player': self}))
+
+    def get_bids_html(self):
+        bids = self.group.get_bids()
+        return mark_safe(render_to_string('double_auction/includes/bids_to_render.html',
+                                          {
+                                              'bids': bids,
+                                              'player': self}
+                                          ))
+
     def get_contracts_queryset(self):
         contracts = self.get_contracts()
         if self.role() == 'seller':
@@ -230,6 +229,7 @@ class Player(BasePlayer):
         else:
             no_slots_or_funds = not self.get_full_slots().exists()
             no_statements = not self.get_asks().exists()
+
         return {'no_slots_or_funds': no_slots_or_funds,
                 'no_statements': no_statements, }
 
@@ -248,7 +248,8 @@ class Player(BasePlayer):
         return self.bids.all()
 
     def get_asks(self):
-        return self.asks.all()
+        return Ask.active_statements.filter(player=self)
+        # return self.asks.all()
 
     def action_name(self):
         if self.role() == 'buyer':
@@ -287,7 +288,7 @@ class BaseRecord(djmodels.Model):
 
 class ActiveStatementManager(djmodels.Manager):
     def get_queryset(self):
-        return super().get_queryset().filter(active=True)
+        return super().get_queryset().filter(active=True, player__active=True)
 
 
 class BaseStatement(BaseRecord):
@@ -334,8 +335,6 @@ class Ask(BaseStatement):
                                 ask=instance,
                                 price=min([bid.price, float(instance.price)]),
                                 item=item)
-            else:
-                print('NOTHING TO SELL')
 
 
 class Bid(BaseStatement):
@@ -359,9 +358,7 @@ class Bid(BaseStatement):
                                 ask=ask,
                                 price=min([float(instance.price), ask.price]),
                                 item=item)
-            else:
-                # todo: deal with it
-                print('NOTHING TO SELL')
+
 
 
 class Slot(djmodels.Model):
@@ -402,8 +399,6 @@ class Contract(djmodels.Model):
 
     @classmethod
     def create(cls, item, bid, ask, price):
-        # todo: check if buyer has funds
-        # todo: check if buyer has free slots
         buyer = bid.player
         seller = ask.player
         cost = item.slot.cost

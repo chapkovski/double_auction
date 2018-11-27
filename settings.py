@@ -14,10 +14,11 @@ SESSION_CONFIG_DEFAULTS = {
 SESSION_CONFIGS = [
     {
         'name': 'double_auction',
-        'display_name': "Double auction",
+        'display_name': 'Double auction',
         'num_demo_participants': 3,
         'app_sequence': ['double_auction'],
-        'whatever': 'whatever'
+        'sellers': 1,
+        'buyers': 2,
     },
 ]
 
