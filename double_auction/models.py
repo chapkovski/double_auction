@@ -15,12 +15,11 @@ from channels import Group as ChannelGroup
 
 from .exceptions import NotEnoughFunds, NotEnoughItemsToSell
 
-author = 'Philipp Chapkovski (c) 2018 , Higher School of Economics, Moscow.' \
-         'Chapkovski@gmail.com'
+author = ''
 
 doc = """
 A double auction for oTree.
-A working paper with description is available here: http://chapkovski.github.io
+
 Instructions are mostly taken from http://veconlab.econ.virginia.edu/da/da.php, Virginia University.
 """
 
@@ -104,7 +103,6 @@ class Group(BaseGroup):
     def presence_check(self):
         msg = {'market_over': False}
         if self.no_buyers_left():
-            # todo: check this out later
             self.active = False
             self.save()
             msg = {'market_over': True,
@@ -263,7 +261,6 @@ class Player(BasePlayer):
             else:
                 return self.bids.filter(active=True).latest('created_at')
         except ObjectDoesNotExist:
-            # todo: think a bit what happens if last bid is non existent?
             return
 
     def item_to_sell(self):
@@ -314,12 +311,11 @@ class Ask(BaseStatement):
     def pre_save(cls, sender, instance, *args, **kwargs):
         items_available = Item.objects.filter(slot__owner=instance.player)
         if items_available.count() == 0:
-            raise NotEnoughItemsToSell
+            raise NotEnoughFunds(instance.player)
         num_items_available = items_available.aggregate(num_items=Sum('quantity'))
         if num_items_available['num_items'] < int(instance.quantity):
-            raise NotEnoughItemsToSell
+            raise NotEnoughFunds(instance.player)
 
-    # TODO: move both sginsls (ask, bid) under one method
     @classmethod
     def post_save(cls, sender, instance, created, *args, **kwargs):
         if not created:
@@ -340,8 +336,10 @@ class Ask(BaseStatement):
 class Bid(BaseStatement):
     @classmethod
     def pre_save(cls, sender, instance, *args, **kwargs):
-        if instance.player.endowment <= float(instance.price) * int(instance.quantity):
-            raise NotEnoughFunds
+        # TODO: check for total amount of bids provided by a seller
+        # TODO: remove all bids and asks when a contract is done - does not make sense to have them
+        if instance.player.endowment < float(instance.price) * int(instance.quantity):
+            raise NotEnoughFunds(instance.player)
 
     @classmethod
     def post_save(cls, sender, instance, created, *args, **kwargs):
@@ -350,15 +348,13 @@ class Bid(BaseStatement):
         group = instance.player.group
         asks = Ask.active_statements.filter(player__group=group, price__lte=instance.price).order_by('created_at')
         if asks.exists():
-            ask = asks.last()  ## think about it??
-            # todo: redo all this mess
+            ask = asks.last()
             item = ask.player.item_to_sell()
             if item:
                 Contract.create(bid=instance,
                                 ask=ask,
                                 price=min([float(instance.price), ask.price]),
                                 item=item)
-
 
 
 class Slot(djmodels.Model):
@@ -406,11 +402,10 @@ class Contract(djmodels.Model):
         item.slot = new_slot
         value = new_slot.value
         contract = cls(item=item, bid=bid, ask=ask, price=price, cost=cost, value=value)
-        bid.active = False
-        ask.active = False
-        ask.save()
-        bid.save()
         item.save()
+        Ask.active_statements.filter(player=seller).update(active=False)
+        Bid.active_statements.filter(player=buyer).update(active=False)
+
         buyer.endowment -= contract.price
         contract_parties = [buyer, seller]
         contract.save()
@@ -432,6 +427,10 @@ class Contract(djmodels.Model):
         group = buyer.group
         group_channel = ChannelGroup(group.get_channel_group_name())
         group_channel.send({'text': json.dumps({'presence': group.presence_check()})})
+        for p in group.get_players():
+            group_channel = ChannelGroup(p.get_personal_channel_name())
+            group_channel.send({'text': json.dumps({'asks': p.get_asks_html(),
+                                                    'bids': p.get_bids_html()})})
 
         return contract
 
